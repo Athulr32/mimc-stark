@@ -18,7 +18,8 @@ impl FFT {
 
         result
     }
-
+    
+    /// Compute the DFT for the given polynomials at the roots
     fn compute_dft(&self, values: &[&BigInt], roots: &[&BigInt]) -> Vec<BigInt> {
         assert_eq!(values.len(), roots.len());
         let mut output = Vec::new();
@@ -39,7 +40,7 @@ impl FFT {
     /// f(x) = feven(x^2) + x * fodd(x^2)
     fn compute_fft(&self, values: &[&BigInt], roots_of_unity: &[&BigInt]) -> Vec<BigInt> {
         if values.len() == 4 {
-            return self.compute_dft(values, &roots_of_unity[..roots_of_unity.len() - 1]);
+            return self.compute_dft(values, &roots_of_unity);
         }
 
         // Split into odd and even indices values
@@ -58,9 +59,20 @@ impl FFT {
 
         // Butterfly
         for (i, (x, y)) in l.iter().zip(r).enumerate() {
-            let y_times_root = y * roots_of_unity[i];
-            output[i] = (x + &y_times_root) % &self.p;
-            output[i + l.len()] = (x - &y_times_root).rem_euclid(&self.p);
+            // x = f_even(ω^{2i}) ← DFT of even part at ω^{2i}
+            // y = f_odd(ω^{2i})  ← DFT of odd part at ω^{2i}
+
+            //f_odd(w) = f(w^w) * w
+            let f_odd = y * roots_of_unity[i];
+
+            // f(w) = f_even(w^2) + w * f_odd(w^2)
+            let fw = x + &f_odd;
+
+            // for k = i
+            output[i] = fw % &self.p;
+
+            //for k = i + n/2
+            output[i + l.len()] = (x - &f_odd).rem_euclid(&self.p);
         }
 
         output
@@ -85,23 +97,23 @@ impl FFT {
         let values: Vec<&BigInt> = values.iter().collect();
         let roots: Vec<&BigInt> = roots.iter().collect();
 
-        return self.compute_fft(&values, &roots);
+        return self.compute_fft(&values, &roots[..roots.len() - 1]);
     }
 
     /// Inverse Fast Fourier Transform
     pub fn inv_fft(&self, mut values: Vec<BigInt>, root_of_unity: &BigInt) -> Vec<BigInt> {
-        let roots = self.build_root_of_unity(root_of_unity);
+        let mut roots = self.build_root_of_unity(root_of_unity);
 
-        if roots.len() > values.len() + 1 {
-            let n = roots.len() - values.len() - 1;
-            values.extend_from_slice(&vec![BigInt::ZERO; n]);
-        }
+        self.pad(&roots, &mut values);
 
         let values: Vec<&BigInt> = values.iter().collect();
-        let roots: Vec<&BigInt> = roots[1..].iter().rev().collect();
+        roots.reverse();
+        let roots: Vec<&BigInt> = roots[..roots.len() - 1].iter().collect();
+
+        let n_inv = BigInt::from(values.len()).modpow(&(&self.p - 2), &self.p); //Modular invesrse of values.len()
         let mut inv_fft = self.compute_fft(&values, &roots);
         inv_fft.iter_mut().for_each(|inv| {
-            *inv = &*inv % &self.p;
+            *inv = (&*inv * &n_inv) % &self.p;
         });
         return inv_fft;
     }
@@ -112,26 +124,32 @@ impl FFT {
         mut a: Vec<BigInt>,
         mut b: Vec<BigInt>,
         root_of_unity: &BigInt,
-    ) {
+    ) -> Vec<BigInt> {
         let roots = self.build_root_of_unity(root_of_unity);
+
         self.pad(&roots, &mut a);
         self.pad(&roots, &mut b);
-        let mut roots_ref: Vec<&BigInt> = roots.iter().collect();
+        let roots_ref: Vec<&BigInt> = roots.iter().collect();
         let values_a: Vec<&BigInt> = a.iter().collect();
         let values_b: Vec<&BigInt> = b.iter().collect();
 
         let x1 = self.compute_fft(&values_a, &roots_ref[..roots_ref.len() - 1]);
         let x2 = self.compute_fft(&values_b, &roots_ref[..roots_ref.len() - 1]);
-        let y: Vec<BigInt> = x1.iter().zip(x2).map(|(x1, x2)| x1 * x2).collect();
-        let y_ref: Vec<&BigInt> = y.iter().collect();
-        roots_ref.reverse();
-        self.compute_dft(&y_ref, &roots_ref[..roots_ref.len() - 1]);
+
+
+        let y: Vec<BigInt> = x1
+            .iter()
+            .zip(x2)
+            .map(|(x1, x2)| (x1 * x2) % &self.p)
+            .collect();
+
+        self.inv_fft(y, root_of_unity)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use num_bigint::BigInt;
+    use num_bigint::{BigInt, BigUint};
 
     use crate::fft::FFT;
 
@@ -192,5 +210,18 @@ mod test {
                 BigInt::from(15)
             ]
         );
+    }
+
+    #[test]
+    fn test_mul_poly() {
+        let a: Vec<BigInt> = vec![BigInt::from(1), BigInt::from(2), BigInt::from(3)];
+
+        let b: Vec<BigInt> = vec![BigInt::from(1), BigInt::from(2), BigInt::from(3)];
+        let root_of_unity = BigInt::from(9);
+        let p = BigInt::from(17);
+
+        let fft = FFT { p };
+        let result = fft.multiply_polynomials(a, b, &root_of_unity);
+        println!("{:?}", result);
     }
 }
