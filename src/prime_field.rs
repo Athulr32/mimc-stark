@@ -1,13 +1,28 @@
+use num_bigint::{BigInt, RandomBits};
+use rand::Rng;
 use std::str::FromStr;
 
-use num_bigint::{BigInt, Sign};
-
 /// Represent a Prime field and implementation of operations that can be done in the prime field
+#[derive(Clone)]
 pub struct PrimeField {
     p: BigInt,
 }
 
 impl PrimeField {
+    pub fn new(p: BigInt) -> Self {
+        Self { p }
+    }
+
+    pub fn rand(&self) -> BigInt {
+        let mut rng = rand::rng();
+
+        BigInt::from(1)
+    }
+
+    pub fn get_p(&self) -> BigInt {
+        self.p.clone()
+    }
+
     pub fn add(&self, a: &BigInt, b: &BigInt) -> BigInt {
         (a + b) % &self.p
     }
@@ -167,9 +182,9 @@ impl PrimeField {
         // 1 here is c in the polynomial ax^2 + bx + c
         // We insert next x degree to the left side of the array
         let mut root = vec![BigInt::from(1)];
-        let len = root.len();
         for x in xs {
             root.insert(0, BigInt::ZERO);
+            let len = root.len();
             for i in 0..len - 1 {
                 let med = root[i + 1].clone() * x;
                 root[i] -= med;
@@ -213,19 +228,36 @@ impl PrimeField {
     }
 }
 
-#[test]
-fn test_prime() {
-    let big = BigInt::from_str(
-        "115792089237316195423570985008687907852837564279074904382605163141518161494017",
-    )
-    .unwrap();
+#[cfg(test)]
+mod tests {
+    use crate::prime_field::PrimeField;
+    use num_bigint::BigInt;
+    use std::str::FromStr;
 
-    let v = BigInt::from(31);
-    let prime = PrimeField { p: v };
+    #[test]
+    fn test_prime() {
+        let big = BigInt::from_str(
+            "115792089237316195423570985008687907852837564279074904382605163141518161494017",
+        )
+        .unwrap();
 
-    let poly = [BigInt::from(4), BigInt::from(5), BigInt::from(6)];
-    let m = prime.evaluate_polynomial(&poly, BigInt::from(2));
+        let v = BigInt::from(31);
+        let prime = PrimeField { p: v };
 
-    println!("{:?}", m)
+        let poly = [BigInt::from(4), BigInt::from(5), BigInt::from(6)];
+        let m = prime.evaluate_polynomial(&poly, BigInt::from(2));
+
+        println!("{:?}", m)
+    }
+
+    #[test]
+    fn test_zero_poly() {
+        let v = BigInt::from(31);
+        let prime = PrimeField { p: v };
+        let xs = vec![BigInt::from(2), BigInt::from(3), BigInt::from(4)];
+        let zp = prime.zeropoly(&xs);
+        println!("Zero {:?}", zp);
+        let value = prime.evaluate_polynomial(&zp, BigInt::from(2));
+        println!("Value {:?}", value);
+    }
 }
-

@@ -1,14 +1,20 @@
 use num_bigint::BigInt;
 use num_traits::ops::euclid::Euclid;
 
+use crate::prime_field::PrimeField;
+
 pub struct FFT {
     p: BigInt,
 }
 
 impl FFT {
+    pub fn new(field: PrimeField) -> FFT {
+        Self { p: field.get_p() }
+    }
+
     /// Build all the powers of root of unity (1, w, w^1, w^2...w^n-1, 1)
     /// Used as X coordinate for FFT
-    fn build_root_of_unity(&self, root_of_unity: &BigInt) -> Vec<BigInt> {
+    pub fn build_root_of_unity(&self, root_of_unity: &BigInt) -> Vec<BigInt> {
         let mut result = vec![BigInt::from(1), root_of_unity.clone()];
 
         // We continue until we get w^N = 1
@@ -18,7 +24,7 @@ impl FFT {
 
         result
     }
-    
+
     /// Compute the DFT for the given polynomials at the roots
     fn compute_dft(&self, values: &[&BigInt], roots: &[&BigInt]) -> Vec<BigInt> {
         assert_eq!(values.len(), roots.len());
@@ -38,7 +44,7 @@ impl FFT {
     /// Evaluate the polynomial at roots of unity by computing fft
     /// we split the polynomial into odd and even indexes and recursively compute
     /// f(x) = feven(x^2) + x * fodd(x^2)
-    fn compute_fft(&self, values: &[&BigInt], roots_of_unity: &[&BigInt]) -> Vec<BigInt> {
+    pub fn compute_fft(&self, values: &[&BigInt], roots_of_unity: &[&BigInt]) -> Vec<BigInt> {
         if values.len() == 4 {
             return self.compute_dft(values, &roots_of_unity);
         }
@@ -135,7 +141,6 @@ impl FFT {
 
         let x1 = self.compute_fft(&values_a, &roots_ref[..roots_ref.len() - 1]);
         let x2 = self.compute_fft(&values_b, &roots_ref[..roots_ref.len() - 1]);
-
 
         let y: Vec<BigInt> = x1
             .iter()
